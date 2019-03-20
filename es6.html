@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>双向绑定es6</title>
+  </head>
+  <body>
+    <div id="app">
+      <form action="">
+        <input type="text" v-model="number" />
+        <button type="button" v-click="add">增加</button>
+      </form>
+      <h3 v-bind="number"></h3>
+      <form action="">
+        <input type="text" v-model="number2" />
+        <button type="button" v-click="add2">增加</button>
+      </form>
+      <h3 v-bind="number2"></h3>
+    </div>
+
+    <script>
+      class MyVue {
+        constructor(options) {
+          this._init(options);
+        }
+        _init(options) {
+          this.$el = document.querySelector(options.el);
+          this.$methods = options.methods;
+          this._binding = new Map();
+
+          this._obverser(options.data);
+          this._complie(this.$el);
+        }
+        _obverser(obj) {
+          let _this = this;
+          Object.keys(obj).forEach(key => {
+            _this._binding.set(key, []);
+          });
+          let $data = new Proxy(obj, {
+            get: (target, key, receiver) => {
+              console.log(`${key}获取${target[key]}`);
+              return Reflect.get(target, key, receiver);
+            },
+            set: (target, key, value, receiver) => {
+              console.log(`${key}更新${value}`);
+              let binding = _this._binding.get(key);
+              binding.forEach(item => {
+                item.update(value);
+              });
+              return Reflect.set(target, key, value);
+            }
+          });
+          this.$data = $data;
+        }
+        _complie(root) {
+          let _this = this,
+            nodes = root.children;
+          for (let i = 0; i < nodes.length; i++) {
+            let node = nodes[i];
+            if (node.children.length > 0) {
+              _this._complie(node);
+            }
+            if (node.hasAttribute("v-click")) {
+              let attrVal = node.getAttribute("v-click");
+              node.onclick = _this.$methods[attrVal].bind(_this.$data);
+            }
+            if (
+              node.hasAttribute("v-model") &&
+              (node.tagName === "INPUT" || node.tagName === "TEXTAREA")
+            ) {
+              let attrVal = node.getAttribute("v-model");
+              let handle = _this._binding.get(attrVal);
+
+              node.addEventListener("input", function() {
+                _this.$data[attrVal] = node.value;
+              });
+
+              handle.push(new Watcher(node, _this, attrVal, "value"));
+              _this._binding.set(attrVal, handle);
+            }
+            if (node.hasAttribute("v-bind")) {
+              let attrVal = node.getAttribute("v-bind");
+              let handle = _this._binding.get(attrVal);
+              handle.push(new Watcher(node, _this, attrVal, "innerHTML"));
+              _this._binding.set(attrVal, handle);
+            }
+          }
+        }
+      }
+
+      class Watcher {
+        //更新视图
+        constructor(el, vm, exp, attr) {
+          this.el = el; //node节点 h3
+          this.vm = vm; //实例
+          this.exp = exp; //number
+          this.attr = attr; //innerHTML
+
+          this.update();
+        }
+        update(value) {
+          this.el[this.attr] = value || this.vm.$data[this.exp];
+        }
+      }
+
+      let vue = new MyVue({
+        el: "#app",
+        data: {
+          number: 100,
+          number2: 10
+        },
+        methods: {
+          add: function() {
+            this.number++;
+          },
+          add2: function() {
+            this.number2++;
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
